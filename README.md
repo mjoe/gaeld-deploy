@@ -9,6 +9,11 @@ It downloads the official release tarball (SHA256-verified) and builds a small i
 Services: `app` (nginx + PHP-FPM + queue worker + scheduler), `db` (PostgreSQL 16), `redis` (Valkey 8).
 Redis is required: Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
 
+## Requirements
+
+Docker Engine 24+ with Docker Compose v2.17+ (`docker compose`), on `amd64` or `arm64`.
+About 1 GB of RAM is enough for a small instance (the three containers use roughly 250 MB when idle).
+
 ## Installation
 
 ```bash
@@ -25,6 +30,14 @@ For HTTPS, run a TLS-terminating reverse proxy in front of it (for example Caddy
 instance) and forward to port 8080. Then set `APP_URL` to the public `https://` URL and `SESSION_SECURE_COOKIE=true`
 in `.env`. `TRUSTED_PROXIES=*` is the default and is only safe while port 8080 is not reachable directly
 from untrusted networks (keep `APP_BIND=127.0.0.1`, or restrict it to the proxy's address).
+
+Example with Caddy on the same host (automatic Let's Encrypt certificate):
+
+```
+gaeld.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
 
 **Known upstream bug (v3.9.0):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
 so the admin is redirected to `/email/verify` after the first login. Workaround:
@@ -44,13 +57,18 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update
 docker compose logs -f app
 ```
 
+**Rollback:** `update.sh` takes a backup first. If an upgrade goes wrong, set the previous `GAELD_VERSION` in `.env`,
+rebuild (`docker compose up -d --build`) and restore the backup made before the upgrade with `restore.sh`.
+Do not run an older version against a database that a newer version has already migrated.
+`restore.sh` asks for confirmation, replaces the database, and flushes the Redis cache (which also ends all sessions).
+
 Options in `.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `GAELD_SOURCE` | `release` | `release` = release tarball (SHA256-verified), `git` = build a git ref |
 | `GAELD_VERSION` | `v3.9.0` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
-| `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image) |
+| `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image; not covered by the smoke test) |
 | `ALLOW_REGISTRATION` | `false` | Allow public self-registration at `/register` |
 | `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port |
 | `MAIL_*` | empty | SMTP settings (see below) |
@@ -64,7 +82,9 @@ Options in `.env`:
   instance could create their own organization. Enable it with `ALLOW_REGISTRATION=true`, then
   `docker compose up -d`. The "Create account" link on the login page stays visible but leads to a 404.
 - **Mail:** without SMTP settings (`MAIL_HOST`, ...) password-reset and verification mails are lost (errors in the log).
-- **Backups:** test the restore regularly and keep copies off the host. Swiss law requires business records
+- **Image size:** roughly 500 MB, mostly PHP, its extensions and the application's Composer dependencies.
+- **Backups:** `backup.sh` writes files readable by the current user only, and removes partial files if a step fails.
+  The smoke test covers a backup/restore round trip. Test the restore regularly and keep copies off the host. Swiss law requires business records
   to be kept for 10 years.
 - `docker compose down -v` deletes all data.
 
@@ -76,7 +96,7 @@ expect that going back to an older version may not be possible.
 ## CI
 
 GitHub Actions runs ShellCheck, Hadolint and a full smoke test (build, install, login, cache tags, queue worker,
-restart persistence) on every push. The arm64 job only runs for public repositories.
+restart persistence, backup and restore) on every push. The arm64 job only runs for public repositories.
 
 A daily "Upstream watch" workflow smoke-tests the upstream development head (`main`) and opens an issue when it
 breaks. It also opens an issue when a newer upstream release than the default exists, including the smoke test

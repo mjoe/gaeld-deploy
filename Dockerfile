@@ -38,9 +38,8 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
 
 # ---------- 3. PHP base (extensions) ----------
 FROM php:8.5-fpm-alpine AS php-base
-ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-RUN chmod +x /usr/local/bin/install-php-extensions \
-    && install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
+COPY --from=ghcr.io/mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
     && apk add --no-cache curl
 
 # ---------- 4. Composer dependencies (production only) ----------
@@ -75,6 +74,11 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
     && rm -rf tests docker .github .githooks \
     && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
+
+LABEL org.opencontainers.image.title="gaeld-deploy" \
+      org.opencontainers.image.description="Lean production image for Gäld (Swiss accounting), built from upstream sources" \
+      org.opencontainers.image.source="https://github.com/mjoe/gaeld-deploy" \
+      org.opencontainers.image.licenses="MIT AND AGPL-3.0-or-later"
 
 ENV APP_ENV=production APP_DEBUG=false LOG_CHANNEL=stderr
 EXPOSE 8080

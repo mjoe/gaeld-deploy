@@ -1,0 +1,3 @@
+# Only docker/ is needed from this repository; keep secrets and backups out of the build context.
+*
+!docker/

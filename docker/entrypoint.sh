@@ -16,7 +16,7 @@ chown -R www-data:www-data storage bootstrap/cache
 if [ "${ALLOW_REGISTRATION:-false}" = "true" ]; then
     : > /etc/nginx/snippets/registration.conf
 else
-    echo 'location ^~ /register { return 404; }' > /etc/nginx/snippets/registration.conf
+    echo 'location = /register { return 404; }' > /etc/nginx/snippets/registration.conf
 fi
 
 as_www() { su -s /bin/sh www-data -c "$*"; }

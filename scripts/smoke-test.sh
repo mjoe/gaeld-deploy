@@ -82,5 +82,21 @@ expect "/up after restart" 200 "$(http $URL/up)"
 users=$(dc exec -T db sh -c 'psql -tA -U "$POSTGRES_USER" "$POSTGRES_DB" -c "select count(*) from users;"' | tr -d '\r')
 expect "User preserved" 1 "$users"
 
+echo "== Backup and restore"
+set -a
+# shellcheck source=/dev/null
+. "./$ENV_FILE"
+set +a
+export COMPOSE_PROJECT_NAME=gaeld-smoke BACKUP_DIR=/tmp/gaeld-smoke-backups FORCE=1
+rm -rf "$BACKUP_DIR"
+if ./scripts/backup.sh >/dev/null 2>&1; then ok "Backup created"; else fail "Backup" "success" "error"; fi
+org_before=$(dc exec -T db sh -c 'psql -tA -U "$POSTGRES_USER" "$POSTGRES_DB" -c "select name from organizations limit 1;"' | tr -d '\r')
+echo "update organizations set name = 'Changed by smoke test';" | dc exec -T db sh -c 'psql -q -U "$POSTGRES_USER" "$POSTGRES_DB"'
+if ./scripts/restore.sh "$(ls "$BACKUP_DIR"/db-*.sql.gz | head -1)" "$(ls "$BACKUP_DIR"/storage-*.tar.gz | head -1)" >/dev/null 2>&1; then ok "Restore ran"; else fail "Restore" "success" "error"; fi
+org_after=$(dc exec -T db sh -c 'psql -tA -U "$POSTGRES_USER" "$POSTGRES_DB" -c "select name from organizations limit 1;"' | tr -d '\r')
+expect "Database content restored" "$org_before" "$org_after"
+expect "/up after restore" 200 "$(http $URL/up)"
+rm -rf "$BACKUP_DIR"
+
 echo
 if [ "$FAILS" -eq 0 ]; then echo "All tests passed."; else echo "$FAILS test(s) failed."; dc logs --tail 60 app; exit 1; fi

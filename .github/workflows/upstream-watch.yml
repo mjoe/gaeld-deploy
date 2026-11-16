@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Smoke test upstream main
         id: smoke
         continue-on-error: true
@@ -44,6 +46,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Compare latest release with the default version
         id: detect
         run: |
@@ -57,13 +61,19 @@ jobs:
         id: smoke
         if: steps.detect.outputs.newer == 'true'
         continue-on-error: true
-        run: GAELD_SOURCE=release GAELD_VERSION=${{ steps.detect.outputs.latest }} ./scripts/smoke-test.sh
+        env:
+          LATEST: ${{ steps.detect.outputs.latest }}
+        run: GAELD_SOURCE=release GAELD_VERSION="$LATEST" ./scripts/smoke-test.sh
       - name: Open an issue about the new release
         if: steps.detect.outputs.newer == 'true'
+        env:
+          LATEST: ${{ steps.detect.outputs.latest }}
+          CURRENT: ${{ steps.detect.outputs.current }}
+          SMOKE: ${{ steps.smoke.outcome }}
         run: |
-          latest='${{ steps.detect.outputs.latest }}'
-          result='passed'; [ '${{ steps.smoke.outcome }}' = 'success' ] || result='FAILED'
+          latest="$LATEST"
+          result='passed'; [ "$SMOKE" = 'success' ] || result='FAILED'
           title="New upstream release $latest available"
-          body="Upstream released $latest (this repo defaults to ${{ steps.detect.outputs.current }}). Smoke test: **$result**. Read the changelog before upgrading, then run \`./scripts/update.sh $latest\` and update GAELD_VERSION in .env.template and compose.yaml. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="Upstream released $latest (this repo defaults to $CURRENT). Smoke test: **$result**. Read the changelog before upgrading, then run \`./scripts/update.sh $latest\` and update GAELD_VERSION in .env.template and compose.yaml. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           n=$(gh issue list --state all --search "\"$title\" in:title" --json number -q '.[0].number')
           [ -n "$n" ] || gh issue create --title "$title" --body "$body"
