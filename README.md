@@ -5,11 +5,43 @@
 Lean production setup for [Gäld](https://github.com/Scanix/Gaeld) (Community Edition, AGPL-3.0), a Swiss
 double-entry accounting application.
 
-It downloads the official release tarball (SHA256-verified) and builds a small image from it,
-**without modifying the upstream source code**. Upstream only ships a Laravel Sail development compose file.
+It builds a compact image from an official upstream release (SHA256-verified tarball) or from a git ref such as the
+development head, **without modifying the upstream source code**. Upstream only ships a Laravel Sail development
+compose file.
 
-Services: `app` (nginx + PHP-FPM + queue worker + scheduler), `db` (PostgreSQL 16), `redis` (Valkey 8).
-Redis is required: Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
+## Architecture and network flow
+
+```mermaid
+flowchart LR
+    U["Browser"]
+    P["TLS proxy<br/>your own: Caddy, nginx, Traefik, ...<br/>NOT part of this stack"]
+    M["Mail server (optional)"]
+
+    U -->|"HTTPS :443"| P
+
+    subgraph H["Docker host"]
+        subgraph S["This compose stack (internal network)"]
+            A["app<br/>nginx :8080 to PHP-FPM<br/>queue worker, scheduler"]
+            D[("db<br/>PostgreSQL 16 :5432")]
+            R[("redis<br/>Valkey :6379")]
+        end
+        V1[/"volume: storage"/]
+        V2[/"volume: pgdata"/]
+    end
+
+    P -->|"HTTP 127.0.0.1:8080"| A
+    A -->|"SQL"| D
+    A -->|"cache, sessions, queue"| R
+    A -->|"SMTP"| M
+    A --- V1
+    D --- V2
+```
+
+- **`app`** is the only container that is published to the host, on `127.0.0.1:8080` by default. The nginx inside serves
+  static files and passes PHP requests to PHP-FPM. The same container runs the queue worker and the scheduler.
+- **`db`** (PostgreSQL 16) and **`redis`** (Valkey, a Redis-compatible store) are only reachable inside the compose
+  network. Redis is required because Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
+- **HTTPS** is not handled by this stack, see [TLS and reverse proxy](#tls-and-reverse-proxy).
 
 ## Requirements
 
@@ -20,7 +52,7 @@ About 1 GB of RAM is enough for a small instance (the three containers use rough
 
 ```bash
 ./scripts/init.sh                 # creates .env (random APP_KEY and DB password)
-nano .env                         # set APP_URL (see HTTPS below)
+nano .env                         # set APP_URL (see TLS and reverse proxy)
 docker compose up -d --build
 docker compose exec -u www-data app php artisan gaeld:install   # interactive: admin user + organization
 ```
@@ -32,16 +64,28 @@ so the admin is redirected to `/email/verify` after the first login. Workaround:
 docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update users set email_verified_at=now() where email_verified_at is null;"'
 ```
 
-### HTTPS
+## TLS and reverse proxy
 
-The application is served by the nginx inside the container on port 8080, over plain HTTP. That nginx serves static
-files and hands PHP requests to PHP-FPM, but it does **not** provide HTTPS: it has no certificates and is not meant to
-face the internet directly. For HTTPS you put a TLS proxy of your choice in front of it; it is not part of this stack:
+The nginx inside the container speaks plain HTTP on port 8080 and has no certificates. It is the application's web
+server, not an internet-facing gateway. HTTPS is provided by a TLS proxy that you run in front of it (it is not part
+of this stack).
 
-```
-browser --HTTPS--> your TLS proxy (Caddy, nginx, ...) --HTTP--> container: nginx --> PHP-FPM --> Gäld
-                   (outside this stack)                         (port 8080)
-```
+### What makes sense
+
+Use HTTPS whenever real data is involved: Gäld handles logins and financial data, and browsers only allow passkeys
+(WebAuthn) in a secure context. The most sensible setup is **one TLS proxy per host that terminates HTTPS and forwards to
+`127.0.0.1:8080`**, with the container port left on localhost. Certificates and renewal belong in that proxy, not in the
+application image, and one proxy can serve several applications on the same host.
+
+| Your situation | Recommendation |
+|---|---|
+| Reachable from the internet under your own domain | A TLS proxy with automatic Let's Encrypt certificates on the same host. **Caddy** is the simplest choice. |
+| You already run a proxy for other services (Traefik, Nginx Proxy Manager, nginx, ...) | Reuse it and add one route to port 8080. Do not add a second proxy. |
+| Only reachable from your LAN or over a VPN, but you have a domain | Keep HTTPS anyway: a proxy using the DNS-01 challenge (certificates without opening ports) or an internal CA. |
+| No inbound ports can be opened | A tunnel such as Cloudflare Tunnel that forwards to port 8080. |
+| Quick local evaluation on one machine | Plain HTTP on `127.0.0.1:8080` (the default) is fine. Do not enter real data over an untrusted network. |
+
+### Setup
 
 Any TLS proxy works as long as it terminates TLS and forwards the `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`
 headers to `127.0.0.1:8080`. Then set in `.env` and run `docker compose up -d`:
@@ -52,11 +96,12 @@ SESSION_SECURE_COOKIE=true
 ```
 
 The default setup publishes the port on `127.0.0.1:8080` only, so only a TLS proxy on the same host can reach it.
-For direct access from your LAN without HTTPS set `APP_BIND=0.0.0.0`.
+For direct access from your LAN without HTTPS set `APP_BIND=0.0.0.0` (trusted networks only).
 
 Minimal examples for a TLS proxy on the same host (not covered by the smoke test):
 
-**Caddy** (obtains and renews Let's Encrypt certificates automatically):
+**Caddy** obtains and renews Let's Encrypt certificates automatically. The domain must point to the host, and ports 80
+and 443 must be reachable from the internet:
 
 ```
 gaeld.example.com {
@@ -87,7 +132,7 @@ server {
 Traefik, Nginx Proxy Manager, Cloudflare Tunnel and similar tools work the same way: forward to port 8080 with the
 headers above.
 
-**TLS proxy on another host:**
+### TLS proxy on another host
 
 - Publish the port on an address the proxy can reach (`APP_BIND` = the host's LAN address) and allow only the proxy to
   connect to port 8080. Ports published by Docker bypass host firewalls such as `ufw` or `firewalld`, so bind to a
@@ -115,16 +160,21 @@ rebuild (`docker compose up -d --build`) and restore the backup made before the 
 Do not run an older version against a database that a newer version has already migrated.
 `restore.sh` asks for confirmation, replaces the database, and flushes the Redis cache (which also ends all sessions).
 
-Options in `.env`:
+## Configuration
+
+Main options in `.env` (see `.env.template` for all of them):
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `GAELD_SOURCE` | `release` | `release` = release tarball (SHA256-verified), `git` = build a git ref |
 | `GAELD_VERSION` | `v3.9.0` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
 | `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image; not covered by the smoke test) |
+| `APP_URL` | `http://localhost:8080` | Public URL of the instance; use the `https://` URL behind a TLS proxy |
+| `SESSION_SECURE_COOKIE` | `false` | Set to `true` when the site is served over HTTPS |
+| `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port of the container |
+| `TRUSTED_PROXIES` | `*` | Whose `X-Forwarded-*` headers are trusted; see [TLS proxy on another host](#tls-proxy-on-another-host) |
 | `ALLOW_REGISTRATION` | `false` | Allow public self-registration at `/register` |
-| `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port |
-| `MAIL_*` | empty | SMTP settings (see below) |
+| `MAIL_*` | empty | SMTP settings (see Notes) |
 
 ## Notes
 
@@ -136,9 +186,9 @@ Options in `.env`:
   `docker compose up -d`. The "Create account" link on the login page stays visible but leads to a 404.
 - **Mail:** without SMTP settings (`MAIL_HOST`, ...) password-reset and verification mails are lost (errors in the log).
 - **Image size:** roughly 500 MB, mostly PHP, its extensions and the application's Composer dependencies.
-- **Backups:** `backup.sh` writes files readable by the current user only, and removes partial files if a step fails.
-  The smoke test covers a backup/restore round trip. Test the restore regularly and keep copies off the host. Swiss law requires business records
-  to be kept for 10 years.
+- **Backups:** `backup.sh` writes files readable by the current user only and removes partial files if a step fails.
+  The smoke test covers a backup/restore round trip. Test the restore regularly and keep copies off the host.
+  Swiss law requires business records to be kept for 10 years.
 - `docker compose down -v` deletes all data.
 
 The exact upstream version of a running instance is stored in the image:
@@ -171,7 +221,8 @@ Releasing a fix for the same upstream version: commit the change and push the ta
 
 ## CI
 
-GitHub Actions runs ShellCheck, Hadolint and a full smoke test (build, install, login, cache tags, queue worker,
+GitHub Actions runs ShellCheck, Hadolint, actionlint, a check that the upstream version is consistent across files,
+and a full smoke test (build, install, login, cache tags, queue worker,
 restart persistence, backup and restore) on every push. The arm64 job only runs for public repositories.
 
 A daily "Upstream watch" workflow smoke-tests the upstream development head (`main`) and opens an issue when it
