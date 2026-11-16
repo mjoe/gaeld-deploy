@@ -2,7 +2,7 @@
 # Usage: scripts/restore.sh backups/db-XXXX.sql.gz [backups/storage-XXXX.tar.gz]
 # ACHTUNG: überschreibt die bestehende Datenbank.
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 [ -f "$1" ] || { echo "DB-Dump angeben"; exit 1; }
 docker compose stop app
 docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'

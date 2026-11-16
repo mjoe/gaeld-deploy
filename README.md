@@ -1,42 +1,72 @@
 # gaeld-deploy
 
-Schlankes Produktions-Setup für [Gäld](https://github.com/Scanix/Gaeld) (Community Edition, AGPL-3.0).
-Lädt das offizielle Release-Tarball (SHA256-geprüft) und baut daraus ein Image – **ohne Änderungen am Quellcode**.
+Lean production setup for [Gäld](https://github.com/Scanix/Gaeld) (Community Edition, AGPL-3.0), a Swiss
+double-entry accounting application.
 
-Dienste: `app` (nginx + PHP-FPM + Queue-Worker + Scheduler), `db` (PostgreSQL 16), `redis` (Valkey 8).
-Redis ist nötig: Gäld nutzt `Cache::tags()`, das der `database`-Cache nicht unterstützt.
+It downloads the official release tarball (SHA256-verified) and builds a small image from it,
+**without modifying the upstream source code**. Upstream only ships a Laravel Sail development compose file.
+
+Services: `app` (nginx + PHP-FPM + queue worker + scheduler), `db` (PostgreSQL 16), `redis` (Valkey 8).
+Redis is required: Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
 
 ## Installation
-```bash
-./scripts/init.sh                 # erzeugt .env (APP_KEY, DB-Passwort)
-nano .env                         # APP_URL anpassen (bei HTTPS: SESSION_SECURE_COOKIE=true)
-docker compose up -d --build
-docker compose exec -u www-data app php artisan gaeld:install   # interaktiv: Admin + Organisation
-```
-Erreichbar unter `http://127.0.0.1:8080`. Für LAN-Zugriff `APP_BIND=0.0.0.0`, für HTTPS einen Reverse Proxy
-(DSM-Reverse-Proxy, Caddy, Traefik) auf Port 8080 setzen.
 
-**Bekannter Upstream-Fehler (v3.8.28):** `gaeld:install` setzt `email_verified_at` nicht (fehlt in `$fillable`),
-der Admin wird danach auf `/email/verify` umgeleitet. Workaround:
+```bash
+./scripts/init.sh                 # creates .env (random APP_KEY and DB password)
+nano .env                         # set APP_URL (behind HTTPS: SESSION_SECURE_COOKIE=true)
+docker compose up -d --build
+docker compose exec -u www-data app php artisan gaeld:install   # interactive: admin user + organization
+```
+
+The app listens on `http://127.0.0.1:8080`. For LAN access set `APP_BIND=0.0.0.0`; for HTTPS put a reverse proxy
+(DSM reverse proxy, Caddy, Traefik, ...) in front of port 8080.
+
+**Known upstream bug (v3.8.28):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
+so the admin is redirected to `/email/verify` after the first login. Workaround:
+
 ```bash
 docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update users set email_verified_at=now() where email_verified_at is null;"'
 ```
 
-## Betrieb
+## Operations
+
 ```bash
-./scripts/backup.sh                   # DB + Belege nach ./backups (14 Tage Rotation)
-./scripts/restore.sh backups/db-….sql.gz [backups/storage-….tar.gz]
-./scripts/update.sh v3.8.29           # Backup, neue Version bauen, Migrationen laufen beim Start
+./scripts/backup.sh                   # DB dump + uploaded files to ./backups (14 days retention)
+./scripts/restore.sh backups/db-<timestamp>.sql.gz [backups/storage-<timestamp>.tar.gz]
+./scripts/update.sh v3.8.29           # backup, build the new version, migrations run on startup
+./scripts/smoke-test.sh               # end-to-end test in an isolated compose project (port 18080)
 docker compose logs -f app
 ```
-Optionen in `.env`: `INSTALL_OCR=true` (Tesseract für Belegerkennung, grösseres Image), SMTP-Variablen für Mailversand.
 
-## Hinweise
-- **Synology (x86):** Image direkt dort bauen (`docker compose build`, ca. 2–5 Min.). Ein amd64-Build auf Apple Silicon
-  scheitert unter QEMU (Segfault beim Kompilieren der PHP-Erweiterungen); dafür eine CI mit amd64-Runner oder den nativen Build nutzen.
-- **Registrierung:** `/register` ist standardmässig gesperrt (nginx liefert 404), weil sich sonst jeder mit Zugriff eine eigene
-  Organisation anlegen könnte. Freigeben mit `ALLOW_REGISTRATION=true` in `.env`, dann `docker compose up -d`.
-  Der Link «Konto erstellen» auf der Login-Seite bleibt sichtbar, führt dann aber ins Leere.
-- **Mail:** Ohne SMTP-Konfiguration (`MAIL_HOST` …) gehen Passwort-Reset- und Verifikationsmails verloren (Fehler im Log).
-- Backups regelmässig testen und ausserhalb des Hosts ablegen (Geschäftsbücher: 10 Jahre Aufbewahrung).
-- `docker compose down -v` löscht alle Daten.
+Options in `.env`:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `GAELD_VERSION` | `v3.8.28` | Upstream release to build |
+| `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image) |
+| `ALLOW_REGISTRATION` | `false` | Allow public self-registration at `/register` |
+| `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port |
+| `MAIL_*` | empty | SMTP settings (see below) |
+
+## Notes
+
+- **Synology (x86):** build the image directly on the NAS (`docker compose build`, roughly 2-5 minutes).
+  Building amd64 on Apple Silicon fails under QEMU (segfault while compiling the PHP extensions);
+  use an amd64 CI runner or a native build instead.
+- **Registration:** `/register` is blocked by default (nginx returns 404). Without this, anyone who can reach the
+  instance could create their own organization. Enable it with `ALLOW_REGISTRATION=true`, then
+  `docker compose up -d`. The "Create account" link on the login page stays visible but leads to a 404.
+- **Mail:** without SMTP settings (`MAIL_HOST`, ...) password-reset and verification mails are lost (errors in the log).
+- **Backups:** test the restore regularly and keep copies off the host. Swiss law requires business records
+  to be kept for 10 years.
+- `docker compose down -v` deletes all data.
+
+## CI
+
+GitHub Actions runs ShellCheck, Hadolint and a full smoke test (build, install, login, cache tags, queue worker,
+restart persistence) on every push. The arm64 job only runs for public repositories.
+
+## License
+
+Gäld is licensed under AGPL-3.0-or-later (upstream: <https://github.com/Scanix/Gaeld>).
+The license of this repository has not been decided yet.
