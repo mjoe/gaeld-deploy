@@ -15,7 +15,7 @@ RUN set -eux; \
     mkdir /src; tar xzf gaeld.tar.gz -C /src --strip-components=1
 
 # ---------- 2. Frontend bauen (plattformunabhängig, immer nativ: Node crasht unter QEMU) ----------
-FROM --platform=$BUILDPLATFORM node:22-alpine AS assets
+FROM --platform=$BUILDPLATFORM node:26-alpine AS assets
 RUN corepack enable
 WORKDIR /app
 COPY --from=source /src /app
