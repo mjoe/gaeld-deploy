@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: shellcheck -s sh scripts/*.sh docker/entrypoint.sh
+      - name: Hadolint (Dockerfile)
+        run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
+      - name: Compose-Datei validieren
+        run: |
+          ./scripts/init.sh .env.ci
+          docker compose --env-file .env.ci config -q
+
+  smoke-amd64:
+    name: Build + Smoke-Test (amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke-Test
+        run: ./scripts/smoke-test.sh
+
+  # ARM-Runner sind nur für öffentliche Repos kostenlos
+  smoke-arm64:
+    name: Build + Smoke-Test (arm64)
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke-Test
+        run: ./scripts/smoke-test.sh
