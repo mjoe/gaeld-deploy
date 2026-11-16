@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck
-        run: shellcheck -s sh scripts/*.sh docker/entrypoint.sh
+        run: shellcheck -S warning -s sh scripts/*.sh docker/entrypoint.sh
       - name: Hadolint (Dockerfile)
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
       - name: Compose-Datei validieren

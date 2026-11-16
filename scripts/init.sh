@@ -1,7 +1,7 @@
 #!/bin/sh
 # Erzeugt eine Env-Datei (Standard: .env) mit zufälligem APP_KEY und DB-Passwort (überschreibt nichts Bestehendes).
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 target="${1:-.env}"
 if [ -f "$target" ]; then echo "$target existiert bereits – nichts zu tun."; exit 0; fi
 cp .env.template "$target"

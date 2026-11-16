@@ -1,7 +1,7 @@
 #!/bin/sh
 # Sichert DB-Dump + storage-Volume nach ./backups (Rotation: 14 Tage)
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 ts=$(date +%F_%H%M)
 dir=backups; mkdir -p "$dir"
 docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$dir/db-$ts.sql.gz"

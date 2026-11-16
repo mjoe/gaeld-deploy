@@ -2,7 +2,7 @@
 # Smoke-Test in einem isolierten Compose-Projekt (Port 18080, eigene Volumes, wird danach entfernt).
 # Nutzung: scripts/smoke-test.sh      (lokal oder in der CI; braucht docker compose v2.17+)
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 PORT=18080
 URL="http://localhost:$PORT"
 export ENV_FILE=.env.smoke
