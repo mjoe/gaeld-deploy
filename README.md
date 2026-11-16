@@ -18,8 +18,13 @@ docker compose up -d --build
 docker compose exec -u www-data app php artisan gaeld:install   # interactive: admin user + organization
 ```
 
-The app listens on `http://127.0.0.1:8080`. For LAN access set `APP_BIND=0.0.0.0`; for HTTPS put a reverse proxy
-(Caddy, Traefik, nginx, ...) in front of port 8080.
+The container serves plain HTTP only: the nginx inside the image just fronts PHP-FPM on port 8080 and does not
+terminate TLS. By default the port is published on `127.0.0.1:8080` only. For LAN access set `APP_BIND=0.0.0.0`.
+
+For HTTPS, run a TLS-terminating reverse proxy in front of it (for example Caddy, Traefik, or a separate nginx
+instance) and forward to port 8080. Then set `APP_URL` to the public `https://` URL and `SESSION_SECURE_COOKIE=true`
+in `.env`. `TRUSTED_PROXIES=*` is the default and is only safe while port 8080 is not reachable directly
+from untrusted networks (keep `APP_BIND=127.0.0.1`, or restrict it to the proxy's address).
 
 **Known upstream bug (v3.9.0):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
 so the admin is redirected to `/email/verify` after the first login. Workaround:
