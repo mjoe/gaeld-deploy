@@ -3,7 +3,7 @@
 # GAELD_SOURCE=release: GAELD_VERSION is a release tag (tarball, SHA256-verified)
 # GAELD_SOURCE=git:     GAELD_VERSION is any git ref of the upstream repo (main, branch, tag or commit)
 ARG GAELD_SOURCE=release
-ARG GAELD_VERSION=v3.8.28
+ARG GAELD_VERSION=v3.9.0
 
 # ---------- 1a. Fetch a release tarball and verify its checksum ----------
 FROM alpine:3.21 AS source-release

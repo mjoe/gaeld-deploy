@@ -4,9 +4,9 @@ services:
       context: .
       args:
         GAELD_SOURCE: ${GAELD_SOURCE:-release}
-        GAELD_VERSION: ${GAELD_VERSION:-v3.8.28}
+        GAELD_VERSION: ${GAELD_VERSION:-v3.9.0}
         INSTALL_OCR: ${INSTALL_OCR:-false}
-    image: gaeld-deploy:${GAELD_VERSION:-v3.8.28}
+    image: gaeld-deploy:${GAELD_VERSION:-v3.9.0}
     restart: unless-stopped
     env_file: ${ENV_FILE:-.env}
     environment:

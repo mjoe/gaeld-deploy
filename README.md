@@ -21,7 +21,7 @@ docker compose exec -u www-data app php artisan gaeld:install   # interactive: a
 The app listens on `http://127.0.0.1:8080`. For LAN access set `APP_BIND=0.0.0.0`; for HTTPS put a reverse proxy
 (DSM reverse proxy, Caddy, Traefik, ...) in front of port 8080.
 
-**Known upstream bug (v3.8.28):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
+**Known upstream bug (v3.9.0):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
 so the admin is redirected to `/email/verify` after the first login. Workaround:
 
 ```bash
@@ -33,7 +33,7 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update
 ```bash
 ./scripts/backup.sh                   # DB dump + uploaded files to ./backups (14 days retention)
 ./scripts/restore.sh backups/db-<timestamp>.sql.gz [backups/storage-<timestamp>.tar.gz]
-./scripts/update.sh v3.8.29           # backup, build an upstream release (SHA256-verified), migrations run on startup
+./scripts/update.sh v3.9.1           # backup, build an upstream release (SHA256-verified), migrations run on startup
 ./scripts/update.sh main              # same, but build the upstream development head (or any branch/tag/commit)
 ./scripts/smoke-test.sh               # end-to-end test in an isolated compose project (port 18080)
 docker compose logs -f app
@@ -44,7 +44,7 @@ Options in `.env`:
 | Variable | Default | Purpose |
 |---|---|---|
 | `GAELD_SOURCE` | `release` | `release` = release tarball (SHA256-verified), `git` = build a git ref |
-| `GAELD_VERSION` | `v3.8.28` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
+| `GAELD_VERSION` | `v3.9.0` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
 | `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image) |
 | `ALLOW_REGISTRATION` | `false` | Allow public self-registration at `/register` |
 | `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port |
