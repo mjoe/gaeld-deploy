@@ -12,35 +12,35 @@ compose file.
 ## Architecture and network flow
 
 ```mermaid
-flowchart LR
+flowchart TB
     U["Browser"]
-    P["TLS proxy<br/>your own: Caddy, nginx, Traefik, ...<br/>NOT part of this stack"]
-    M["Mail server (optional)"]
+    P["TLS proxy<br/>your own: Caddy, nginx, Traefik, ...<br/>(not part of this stack)"]
+    M["Mail server<br/>(optional)"]
 
     U -->|"HTTPS :443"| P
+    P -->|"HTTP 127.0.0.1:8080"| A
 
-    subgraph H["Docker host"]
-        subgraph S["This compose stack (internal network)"]
-            A["app<br/>nginx :8080 to PHP-FPM<br/>queue worker, scheduler"]
-            D[("db<br/>PostgreSQL 16 :5432")]
-            R[("redis<br/>Valkey :6379")]
-        end
-        V1[/"volume: storage"/]
-        V2[/"volume: pgdata"/]
+    subgraph S["gaeld-deploy compose stack"]
+        A["app<br/>nginx :8080 to PHP-FPM<br/>+ queue worker + scheduler"]
+        D[("db<br/>PostgreSQL 16")]
+        R[("redis<br/>Valkey")]
+        A -->|"SQL :5432"| D
+        A -->|"cache, sessions, queue :6379"| R
     end
 
-    P -->|"HTTP 127.0.0.1:8080"| A
-    A -->|"SQL"| D
-    A -->|"cache, sessions, queue"| R
-    A -->|"SMTP"| M
-    A --- V1
-    D --- V2
+    A -.->|"SMTP"| M
+
+    classDef outside stroke-dasharray: 5 5
+    class U,P,M outside
 ```
+
+Dashed boxes are outside the stack.
 
 - **`app`** is the only container that is published to the host, on `127.0.0.1:8080` by default. The nginx inside serves
   static files and passes PHP requests to PHP-FPM. The same container runs the queue worker and the scheduler.
 - **`db`** (PostgreSQL 16) and **`redis`** (Valkey, a Redis-compatible store) are only reachable inside the compose
-  network. Redis is required because Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
+  network. Data lives in the named volumes `pgdata`, `redisdata` and `storage` (uploaded receipts, logs).
+  Redis is required because Gäld uses `Cache::tags()`, which the `database` cache driver does not support.
 - **HTTPS** is not handled by this stack, see [TLS and reverse proxy](#tls-and-reverse-proxy).
 
 ## Requirements
