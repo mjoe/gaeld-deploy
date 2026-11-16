@@ -3,7 +3,7 @@
 ARG GAELD_VERSION=v3.8.28
 
 # ---------- 1. Quellcode holen und Prüfsumme verifizieren ----------
-FROM alpine:3.21 AS source
+FROM alpine:3.24 AS source
 ARG GAELD_VERSION
 RUN apk add --no-cache curl
 WORKDIR /dl
