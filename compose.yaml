@@ -38,7 +38,7 @@ services:
       retries: 10
 
   redis:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     restart: unless-stopped
     command: ["valkey-server", "--save", "60", "1", "--appendonly", "no"]
     volumes:
