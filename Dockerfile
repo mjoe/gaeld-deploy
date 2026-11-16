@@ -67,6 +67,15 @@ RUN --mount=type=cache,target=/root/.composer/cache \
     COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction \
       --prefer-dist --optimize-autoloader --classmap-authoritative
 
+# Optional local fonts (patches/fonts/*.ttf, none are shipped): convert them for TCPDF.
+# The font name is derived from the file name, e.g. AvenirNext-Regular.ttf becomes "avenirnext".
+COPY patches/fonts/ /fonts/
+RUN set -eu; \
+    for f in /fonts/*.ttf; do \
+        [ -e "$f" ] || continue; \
+        php -r 'require "/app/vendor/autoload.php"; $n = TCPDF_FONTS::addTTFfont($argv[1], "TrueTypeUnicode", "", 96, "/app/vendor/tecnickcom/tcpdf/fonts/"); if ($n === false) { fwrite(STDERR, "ERROR: cannot convert ".$argv[1]."\n"); exit(1); } echo "Font ".basename($argv[1])." -> ".$n."\n";' "$f"; \
+    done
+
 # ---------- 5. Runtime ----------
 FROM php-base AS runtime
 ARG INSTALL_OCR=false

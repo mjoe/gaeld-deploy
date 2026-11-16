@@ -8,3 +8,4 @@ backups/
 
 # Local patches stay on your machine
 patches/*.patch
+patches/fonts/*.ttf

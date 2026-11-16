@@ -231,6 +231,10 @@ The repository ships none, `*.patch` files are ignored by git, and the published
 See [patches/README.md](patches/README.md) for the format and the AGPL note. A broken or empty patch stops the build
 with an error, and the applied patches are listed in `/var/www/html/.gaeld-rev`.
 
+Patches can also use custom fonts: TrueType files in `patches/fonts/*.ttf` are converted for TCPDF during the build
+(see [patches/fonts/README.md](patches/fonts/README.md)). They are git-ignored as well, so a font you are not allowed to
+redistribute never leaves your machine.
+
 ## Releases and versioning
 
 Releases of this repository are tagged `v<upstream version>-<revision>`, for example `v3.9.0-1`:
