@@ -3,6 +3,7 @@ services:
     build:
       context: .
       args:
+        GAELD_SOURCE: ${GAELD_SOURCE:-release}
         GAELD_VERSION: ${GAELD_VERSION:-v3.8.28}
         INSTALL_OCR: ${INSTALL_OCR:-false}
     image: gaeld-deploy:${GAELD_VERSION:-v3.8.28}

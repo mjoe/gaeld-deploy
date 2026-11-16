@@ -1,0 +1,69 @@
+name: Upstream watch
+
+# Daily check of the upstream project: does the development head still build and pass the
+# smoke test, and is there a newer release than the one this repo defaults to?
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  UPSTREAM: Scanix/Gaeld
+
+jobs:
+  head:
+    name: Upstream head (main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke test upstream main
+        id: smoke
+        continue-on-error: true
+        run: GAELD_SOURCE=git GAELD_VERSION=main ./scripts/smoke-test.sh
+      - name: Open or update an issue on failure
+        if: steps.smoke.outcome == 'failure'
+        run: |
+          sha=$(git ls-remote "https://github.com/$UPSTREAM.git" refs/heads/main | cut -f1)
+          title="Upstream head (main) fails the smoke test"
+          body="The smoke test failed for upstream main at \`$sha\`. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          n=$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
+      - name: Fail the job if the smoke test failed
+        if: steps.smoke.outcome == 'failure'
+        run: exit 1
+
+  release:
+    name: Latest upstream release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare latest release with the default version
+        id: detect
+        run: |
+          latest=$(gh api "repos/$UPSTREAM/releases/latest" -q .tag_name)
+          current=$(sed -n 's/^GAELD_VERSION=//p' .env.template)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          newest=$(printf '%s\n%s\n' "$latest" "$current" | sort -V | tail -1)
+          if [ "$latest" != "$current" ] && [ "$newest" = "$latest" ]; then echo "newer=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Smoke test the new release
+        id: smoke
+        if: steps.detect.outputs.newer == 'true'
+        continue-on-error: true
+        run: GAELD_SOURCE=release GAELD_VERSION=${{ steps.detect.outputs.latest }} ./scripts/smoke-test.sh
+      - name: Open an issue about the new release
+        if: steps.detect.outputs.newer == 'true'
+        run: |
+          latest='${{ steps.detect.outputs.latest }}'
+          result='passed'; [ '${{ steps.smoke.outcome }}' = 'success' ] || result='FAILED'
+          title="New upstream release $latest available"
+          body="Upstream released $latest (this repo defaults to ${{ steps.detect.outputs.current }}). Smoke test: **$result**. Read the changelog before upgrading, then run \`./scripts/update.sh $latest\` and update GAELD_VERSION in .env.template and compose.yaml. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          n=$(gh issue list --state all --search "\"$title\" in:title" --json number -q '.[0].number')
+          [ -n "$n" ] || gh issue create --title "$title" --body "$body"

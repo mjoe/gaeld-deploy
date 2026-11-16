@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1.7
 # Gäld Community Edition - lean production image (overlay, no changes to the upstream source)
+# GAELD_SOURCE=release: GAELD_VERSION is a release tag (tarball, SHA256-verified)
+# GAELD_SOURCE=git:     GAELD_VERSION is any git ref of the upstream repo (main, branch, tag or commit)
+ARG GAELD_SOURCE=release
 ARG GAELD_VERSION=v3.8.28
 
-# ---------- 1. Fetch the source and verify its checksum ----------
-FROM alpine:3.21 AS source
+# ---------- 1a. Fetch a release tarball and verify its checksum ----------
+FROM alpine:3.21 AS source-release
 ARG GAELD_VERSION
 RUN apk add --no-cache curl
 WORKDIR /dl
@@ -12,7 +15,17 @@ RUN set -eux; \
     curl -fsSL -o gaeld.tar.gz "$base/gaeld-ce-${GAELD_VERSION}.tar.gz"; \
     curl -fsSL -o gaeld.tar.gz.sha256 "$base/gaeld-ce-${GAELD_VERSION}.tar.gz.sha256"; \
     echo "$(cut -d' ' -f1 gaeld.tar.gz.sha256)  gaeld.tar.gz" | sha256sum -c -; \
-    mkdir /src; tar xzf gaeld.tar.gz -C /src --strip-components=1
+    mkdir /src; tar xzf gaeld.tar.gz -C /src --strip-components=1; \
+    echo "release ${GAELD_VERSION}" > /src/.gaeld-rev
+
+# ---------- 1b. Fetch a git ref (BuildKit resolves the ref, so the cache follows upstream) ----------
+FROM alpine:3.21 AS source-git
+ARG GAELD_VERSION
+RUN apk add --no-cache git
+ADD --keep-git-dir=true https://github.com/Scanix/Gaeld.git#${GAELD_VERSION} /src
+RUN echo "git ${GAELD_VERSION} $(git -C /src rev-parse HEAD)" > /src/.gaeld-rev && rm -rf /src/.git
+
+FROM source-${GAELD_SOURCE} AS source
 
 # ---------- 2. Build the frontend (platform independent, always native: Node crashes under QEMU) ----------
 FROM --platform=$BUILDPLATFORM node:22-alpine AS assets

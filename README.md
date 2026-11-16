@@ -33,7 +33,8 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update
 ```bash
 ./scripts/backup.sh                   # DB dump + uploaded files to ./backups (14 days retention)
 ./scripts/restore.sh backups/db-<timestamp>.sql.gz [backups/storage-<timestamp>.tar.gz]
-./scripts/update.sh v3.8.29           # backup, build the new version, migrations run on startup
+./scripts/update.sh v3.8.29           # backup, build an upstream release (SHA256-verified), migrations run on startup
+./scripts/update.sh main              # same, but build the upstream development head (or any branch/tag/commit)
 ./scripts/smoke-test.sh               # end-to-end test in an isolated compose project (port 18080)
 docker compose logs -f app
 ```
@@ -42,7 +43,8 @@ Options in `.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GAELD_VERSION` | `v3.8.28` | Upstream release to build |
+| `GAELD_SOURCE` | `release` | `release` = release tarball (SHA256-verified), `git` = build a git ref |
+| `GAELD_VERSION` | `v3.8.28` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
 | `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image) |
 | `ALLOW_REGISTRATION` | `false` | Allow public self-registration at `/register` |
 | `APP_BIND` / `APP_PORT` | `127.0.0.1` / `8080` | Published address and port |
@@ -61,10 +63,19 @@ Options in `.env`:
   to be kept for 10 years.
 - `docker compose down -v` deletes all data.
 
+The exact upstream version of a running instance is stored in the image:
+`docker compose exec app cat /var/www/html/.gaeld-rev` (for git builds it includes the resolved commit).
+Development heads can contain unreleased migrations and breaking changes: back up first (`update.sh` does) and
+expect that going back to an older version may not be possible.
+
 ## CI
 
 GitHub Actions runs ShellCheck, Hadolint and a full smoke test (build, install, login, cache tags, queue worker,
 restart persistence) on every push. The arm64 job only runs for public repositories.
+
+A daily "Upstream watch" workflow smoke-tests the upstream development head (`main`) and opens an issue when it
+breaks. It also opens an issue when a newer upstream release than the default exists, including the smoke test
+result for that release.
 
 ## License
 

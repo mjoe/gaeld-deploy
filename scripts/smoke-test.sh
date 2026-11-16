@@ -17,9 +17,16 @@ http() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
 rm -f "$ENV_FILE"; ./scripts/init.sh "$ENV_FILE" >/dev/null
 sed -i.bak "s|^APP_PORT=.*|APP_PORT=$PORT|; s|^APP_URL=.*|APP_URL=$URL|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"
+# Optional: test another upstream version, e.g. GAELD_SOURCE=git GAELD_VERSION=main scripts/smoke-test.sh
+for key in GAELD_SOURCE GAELD_VERSION; do
+  eval "val=\${$key:-}"
+  [ -n "$val" ] && { sed -i.bak "s|^$key=.*|$key=$val|" "$ENV_FILE"; rm -f "$ENV_FILE.bak"; }
+done
 
 echo "== Start"
 dc up -d --build --wait --wait-timeout 300 || { dc logs --tail 80; echo "FAIL Start"; exit 1; }
+
+echo "Upstream source: $(dc exec -T app cat /var/www/html/.gaeld-rev 2>/dev/null)"
 
 echo "== HTTP"
 expect "/up"                200 "$(http $URL/up)"
