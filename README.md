@@ -34,20 +34,27 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -c "update
 
 ### HTTPS
 
-The stack does **not** include a reverse proxy. The image only contains an internal nginx that serves the application
-over plain HTTP on port 8080 (it is not meant to be exposed and does not handle certificates). For HTTPS, run the
-reverse proxy you already use in front of it. Any proxy works as long as it terminates TLS and forwards the `Host`,
-`X-Forwarded-For` and `X-Forwarded-Proto` headers to `127.0.0.1:8080`. Then set in `.env` and run `docker compose up -d`:
+The application is served by the nginx inside the container on port 8080, over plain HTTP. That nginx serves static
+files and hands PHP requests to PHP-FPM, but it does **not** provide HTTPS: it has no certificates and is not meant to
+face the internet directly. For HTTPS you put a TLS proxy of your choice in front of it; it is not part of this stack:
+
+```
+browser --HTTPS--> your TLS proxy (Caddy, nginx, ...) --HTTP--> container: nginx --> PHP-FPM --> Gäld
+                   (outside this stack)                         (port 8080)
+```
+
+Any TLS proxy works as long as it terminates TLS and forwards the `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`
+headers to `127.0.0.1:8080`. Then set in `.env` and run `docker compose up -d`:
 
 ```
 APP_URL=https://gaeld.example.com
 SESSION_SECURE_COOKIE=true
 ```
 
-The default setup publishes the port on `127.0.0.1:8080` only, so only a proxy on the same host can reach it.
+The default setup publishes the port on `127.0.0.1:8080` only, so only a TLS proxy on the same host can reach it.
 For direct access from your LAN without HTTPS set `APP_BIND=0.0.0.0`.
 
-Minimal examples for a proxy on the same host (not covered by the smoke test):
+Minimal examples for a TLS proxy on the same host (not covered by the smoke test):
 
 **Caddy** (obtains and renews Let's Encrypt certificates automatically):
 
@@ -80,7 +87,7 @@ server {
 Traefik, Nginx Proxy Manager, Cloudflare Tunnel and similar tools work the same way: forward to port 8080 with the
 headers above.
 
-**Proxy on another host:**
+**TLS proxy on another host:**
 
 - Publish the port on an address the proxy can reach (`APP_BIND` = the host's LAN address) and allow only the proxy to
   connect to port 8080. Ports published by Docker bypass host firewalls such as `ufw` or `firewalld`, so bind to a
