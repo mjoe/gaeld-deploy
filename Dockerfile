@@ -6,7 +6,7 @@ ARG GAELD_SOURCE=release
 ARG GAELD_VERSION=v3.9.0
 
 # ---------- 1a. Fetch a release tarball and verify its checksum ----------
-FROM alpine:3.21 AS source-release
+FROM alpine:3.24 AS source-release
 ARG GAELD_VERSION
 RUN apk add --no-cache curl
 WORKDIR /dl
@@ -19,7 +19,7 @@ RUN set -eux; \
     echo "release ${GAELD_VERSION}" > /src/.gaeld-rev
 
 # ---------- 1b. Fetch a git ref (BuildKit resolves the ref, so the cache follows upstream) ----------
-FROM alpine:3.21 AS source-git
+FROM alpine:3.24 AS source-git
 ARG GAELD_VERSION
 RUN apk add --no-cache git
 ADD --keep-git-dir=true https://github.com/Scanix/Gaeld.git#${GAELD_VERSION} /src
@@ -28,15 +28,16 @@ RUN echo "git ${GAELD_VERSION} $(git -C /src rev-parse HEAD)" > /src/.gaeld-rev 
 FROM source-${GAELD_SOURCE} AS source
 
 # ---------- 2. Build the frontend (platform independent, always native: Node crashes under QEMU) ----------
-FROM --platform=$BUILDPLATFORM node:22-alpine AS assets
-RUN corepack enable
+FROM --platform=$BUILDPLATFORM node:26-alpine AS assets
 WORKDIR /app
 COPY --from=source /src /app
+# Node >= 25 no longer ships corepack: install the pnpm version pinned in package.json via npm
+RUN npm install -g "pnpm@$(node -p "(require('./package.json').packageManager || 'pnpm@latest').split('@')[1]")"
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile && pnpm run build
 
 # ---------- 3. PHP base (extensions) ----------
-FROM php:8.4-fpm-alpine AS php-base
+FROM php:8.5-fpm-alpine AS php-base
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 RUN chmod +x /usr/local/bin/install-php-extensions \
     && install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
