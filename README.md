@@ -11,30 +11,36 @@ compose file.
 
 ## Architecture and network flow
 
-```mermaid
-flowchart TB
-    U["Browser"]
-    P["TLS proxy<br/>your own: Caddy, nginx, Traefik, ...<br/>(not part of this stack)"]
-    M["Mail server<br/>(optional)"]
-
-    U -->|"HTTPS :443"| P
-    P -->|"HTTP 127.0.0.1:8080"| A
-
-    subgraph S["gaeld-deploy compose stack"]
-        A["app<br/>nginx :8080 to PHP-FPM<br/>+ queue worker + scheduler"]
-        D[("db<br/>PostgreSQL 16")]
-        R[("redis<br/>Valkey")]
-        A -->|"SQL :5432"| D
-        A -->|"cache, sessions, queue :6379"| R
-    end
-
-    A -.->|"SMTP"| M
-
-    classDef outside stroke-dasharray: 5 5
-    class U,P,M outside
+```
+  Browser
+     |
+     | HTTPS :443
+     v
+  +----------------------------------------------+
+  | TLS proxy: yours, not part of this stack     |
+  | (Caddy, nginx, Traefik, ...)                 |
+  +----------------------------------------------+
+     |
+     | HTTP 127.0.0.1:8080
+     v
+  +- compose stack -----------------------------------------------+
+  |                                                               |
+  |  +-----------------------------+  SQL :5432   +-------------+ |
+  |  | app                         |------------->| db          | |
+  |  | nginx :8080 -> PHP-FPM      |              | PostgreSQL  | |
+  |  | + queue worker + scheduler  |              +-------------+ |
+  |  |                             |                              |
+  |  |                             |  :6379       +-------------+ |
+  |  |                             |------------->| redis       | |
+  |  +-----------------------------+              | Valkey      | |
+  |       |                                       +-------------+ |
+  +-------|-------------------------------------------------------+
+          | SMTP (optional)
+          v
+ Mail server (yours)
 ```
 
-Dashed boxes are outside the stack.
+Everything outside the "compose stack" box is not part of this repository.
 
 - **`app`** is the only container that is published to the host, on `127.0.0.1:8080` by default. The nginx inside serves
   static files and passes PHP requests to PHP-FPM. The same container runs the queue worker and the scheduler.
