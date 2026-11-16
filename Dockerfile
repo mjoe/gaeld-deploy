@@ -1,0 +1,70 @@
+# syntax=docker/dockerfile:1.7
+# Gäld Community Edition – schlankes Produktions-Image (Overlay, ohne Änderungen am Quellcode)
+ARG GAELD_VERSION=v3.8.28
+
+# ---------- 1. Quellcode holen und Prüfsumme verifizieren ----------
+FROM alpine:3.21 AS source
+ARG GAELD_VERSION
+RUN apk add --no-cache curl
+WORKDIR /dl
+RUN set -eux; \
+    base="https://github.com/Scanix/Gaeld/releases/download/${GAELD_VERSION}"; \
+    curl -fsSL -o gaeld.tar.gz "$base/gaeld-ce-${GAELD_VERSION}.tar.gz"; \
+    curl -fsSL -o gaeld.tar.gz.sha256 "$base/gaeld-ce-${GAELD_VERSION}.tar.gz.sha256"; \
+    echo "$(cut -d' ' -f1 gaeld.tar.gz.sha256)  gaeld.tar.gz" | sha256sum -c -; \
+    mkdir /src; tar xzf gaeld.tar.gz -C /src --strip-components=1
+
+# ---------- 2. Frontend bauen (plattformunabhängig, immer nativ: Node crasht unter QEMU) ----------
+FROM --platform=$BUILDPLATFORM node:22-alpine AS assets
+RUN corepack enable
+WORKDIR /app
+COPY --from=source /src /app
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile && pnpm run build
+
+# ---------- 3. PHP-Basis (Extensions) ----------
+FROM php:8.4-fpm-alpine AS php-base
+ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+RUN chmod +x /usr/local/bin/install-php-extensions \
+    && install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
+    && apk add --no-cache curl
+
+# ---------- 4. Composer-Abhängigkeiten (nur Produktion) ----------
+FROM php-base AS vendor
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+WORKDIR /app
+COPY --from=source /src /app
+RUN --mount=type=cache,target=/root/.composer/cache \
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction \
+      --prefer-dist --optimize-autoloader --classmap-authoritative
+
+# ---------- 5. Runtime ----------
+FROM php-base AS runtime
+ARG INSTALL_OCR=false
+RUN apk add --no-cache nginx supervisor \
+    && if [ "$INSTALL_OCR" = "true" ]; then \
+         apk add --no-cache tesseract-ocr tesseract-ocr-data-deu tesseract-ocr-data-fra tesseract-ocr-data-eng; \
+       fi \
+    && rm -f /etc/nginx/http.d/default.conf \
+    && mkdir -p /etc/nginx/snippets
+
+WORKDIR /var/www/html
+COPY --from=vendor --chown=www-data:www-data /app /var/www/html
+COPY --from=assets --chown=www-data:www-data /app/public/build /var/www/html/public/build
+
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/php.ini /usr/local/etc/php/conf.d/zz-gaeld.ini
+COPY docker/www.conf /usr/local/etc/php-fpm.d/zz-gaeld.conf
+COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && rm -rf tests docker .github .githooks \
+    && mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
+
+ENV APP_ENV=production APP_DEBUG=false LOG_CHANNEL=stderr
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:8080/up || exit 1
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisord.conf"]
