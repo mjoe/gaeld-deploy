@@ -19,7 +19,7 @@ docker compose exec -u www-data app php artisan gaeld:install   # interactive: a
 ```
 
 The app listens on `http://127.0.0.1:8080`. For LAN access set `APP_BIND=0.0.0.0`; for HTTPS put a reverse proxy
-(DSM reverse proxy, Caddy, Traefik, ...) in front of port 8080.
+(Caddy, Traefik, nginx, ...) in front of port 8080.
 
 **Known upstream bug (v3.9.0):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
 so the admin is redirected to `/email/verify` after the first login. Workaround:
@@ -52,9 +52,9 @@ Options in `.env`:
 
 ## Notes
 
-- **Synology (x86):** build the image directly on the NAS (`docker compose build`, roughly 2-5 minutes).
-  Building amd64 on Apple Silicon fails under QEMU (segfault while compiling the PHP extensions);
-  use an amd64 CI runner or a native build instead.
+- **Architectures:** the image builds natively for `amd64` and `arm64`. Build on the target architecture
+  (`docker compose build`, roughly 2-5 minutes); cross-architecture builds under emulation (QEMU) are not supported
+  and can crash while compiling the PHP extensions.
 - **Registration:** `/register` is blocked by default (nginx returns 404). Without this, anyone who can reach the
   instance could create their own organization. Enable it with `ALLOW_REGISTRATION=true`, then
   `docker compose up -d`. The "Create account" link on the login page stays visible but leads to a 404.

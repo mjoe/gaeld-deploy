@@ -27,7 +27,7 @@ RUN echo "git ${GAELD_VERSION} $(git -C /src rev-parse HEAD)" > /src/.gaeld-rev 
 
 FROM source-${GAELD_SOURCE} AS source
 
-# ---------- 2. Build the frontend (platform independent, always native: Node crashes under QEMU) ----------
+# ---------- 2. Build the frontend (platform independent, so it always runs on the build host's native architecture) ----------
 FROM --platform=$BUILDPLATFORM node:26-alpine AS assets
 WORKDIR /app
 COPY --from=source /src /app
