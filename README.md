@@ -223,6 +223,14 @@ The exact upstream version of a running instance is stored in the image:
 Development heads can contain unreleased migrations and breaking changes: back up first (`update.sh` does) and
 expect that going back to an older version may not be possible.
 
+## Local patches (optional)
+
+To change something in Gäld itself, for example texts, colors or a bug fix, put unified diffs into `patches/*.patch`
+and build the image yourself (`docker compose build`). The patches are applied to the upstream source during the build.
+The repository ships none, `*.patch` files are ignored by git, and the published images are never patched.
+See [patches/README.md](patches/README.md) for the format and the AGPL note. A broken or empty patch stops the build
+with an error, and the applied patches are listed in `/var/www/html/.gaeld-rev`.
+
 ## Releases and versioning
 
 Releases of this repository are tagged `v<upstream version>-<revision>`, for example `v3.9.0-1`:

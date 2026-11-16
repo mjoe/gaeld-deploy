@@ -25,7 +25,23 @@ RUN apk add --no-cache git
 ADD --keep-git-dir=true https://github.com/Scanix/Gaeld.git#${GAELD_VERSION} /src
 RUN echo "git ${GAELD_VERSION} $(git -C /src rev-parse HEAD)" > /src/.gaeld-rev && rm -rf /src/.git
 
-FROM source-${GAELD_SOURCE} AS source
+FROM source-${GAELD_SOURCE} AS source-upstream
+
+# ---------- 1c. Apply optional local patches (patches/*.patch; none are shipped) ----------
+FROM source-upstream AS source
+RUN apk add --no-cache patch
+COPY patches/ /patches/
+RUN set -eu; \
+    applied=""; \
+    for p in /patches/*.patch; do \
+        [ -e "$p" ] || continue; \
+        [ -s "$p" ] || { echo "ERROR: $(basename "$p") is empty" >&2; exit 1; }; \
+        echo "Applying $(basename "$p")"; \
+        patch -p1 -d /src --no-backup-if-mismatch < "$p" \
+            || { echo "ERROR: $(basename "$p") does not apply to this Gäld version" >&2; exit 1; }; \
+        applied="$applied $(basename "$p")"; \
+    done; \
+    [ -z "$applied" ] || echo "patched:$applied" >> /src/.gaeld-rev
 
 # ---------- 2. Build the frontend (platform independent, so it always runs on the build host's native architecture) ----------
 FROM --platform=$BUILDPLATFORM node:26-alpine AS assets

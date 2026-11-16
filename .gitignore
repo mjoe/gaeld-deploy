@@ -5,3 +5,6 @@
 .dockercfg/
 backups/
 .DS_Store
+
+# Local patches stay on your machine
+patches/*.patch
