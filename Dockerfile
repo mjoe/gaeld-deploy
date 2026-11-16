@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile && pnpm run build
 
 # ---------- 3. PHP-Basis (Extensions) ----------
-FROM php:8.4-fpm-alpine AS php-base
+FROM php:8.5-fpm-alpine AS php-base
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 RUN chmod +x /usr/local/bin/install-php-extensions \
     && install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
