@@ -139,6 +139,29 @@ The exact upstream version of a running instance is stored in the image:
 Development heads can contain unreleased migrations and breaking changes: back up first (`update.sh` does) and
 expect that going back to an older version may not be possible.
 
+## Releases and versioning
+
+Releases of this repository are tagged `v<upstream version>-<revision>`, for example `v3.9.0-1`:
+
+- `3.9.0` is the Gäld release that gets built, so the upstream version is always visible.
+- `-1` counts changes to this repository (Dockerfile, configuration, scripts) for the same upstream version. It starts at 1
+  for every new upstream release, so fixes can be released without waiting for upstream.
+
+Pushing a tag runs the smoke test on amd64 and arm64, builds a multi-arch image (`linux/amd64`, `linux/arm64`),
+publishes it to `ghcr.io/mjoe/gaeld-deploy` with the tags `3.9.0-1` (exact), `3.9.0` (latest revision of that upstream
+version) and `latest`, and creates a GitHub release. The workflow refuses a tag whose upstream part does not match
+the default `GAELD_VERSION` in the repository.
+
+Releasing a new upstream version:
+
+```bash
+./scripts/bump-upstream.sh v3.9.1     # updates the default version everywhere and checks consistency
+# read the upstream release notes, run ./scripts/smoke-test.sh, commit and push
+git tag v3.9.1-1 && git push origin v3.9.1-1
+```
+
+Releasing a fix for the same upstream version: commit the change and push the tag `v3.9.1-2`.
+
 ## CI
 
 GitHub Actions runs ShellCheck, Hadolint and a full smoke test (build, install, login, cache tags, queue worker,

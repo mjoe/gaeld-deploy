@@ -74,6 +74,6 @@ jobs:
           latest="$LATEST"
           result='passed'; [ "$SMOKE" = 'success' ] || result='FAILED'
           title="New upstream release $latest available"
-          body="Upstream released $latest (this repo defaults to $CURRENT). Smoke test: **$result**. Read the changelog before upgrading, then run \`./scripts/update.sh $latest\` and update GAELD_VERSION in .env.template and compose.yaml. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="Upstream released $latest (this repo defaults to $CURRENT). Smoke test: **$result**. Read the upstream release notes, then run \`./scripts/bump-upstream.sh $latest\`, commit, and tag \`$latest-1\` to publish a new image (see README, section Releases). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           n=$(gh issue list --state all --search "\"$title\" in:title" --json number -q '.[0].number')
           [ -n "$n" ] || gh issue create --title "$title" --body "$body"

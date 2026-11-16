@@ -23,8 +23,12 @@ jobs:
           persist-credentials: false
       - name: ShellCheck
         run: shellcheck -S warning -s sh scripts/*.sh docker/entrypoint.sh
+      - name: actionlint (workflows)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest
       - name: Hadolint (Dockerfile)
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
+      - name: Check that the upstream version is consistent
+        run: ./scripts/check-versions.sh
       - name: Validate compose file
         run: |
           ./scripts/init.sh .env.ci
