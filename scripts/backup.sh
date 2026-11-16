@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sichert DB-Dump + storage-Volume nach ./backups (Rotation: 14 Tage)
+# Backs up a DB dump and the storage volume to ./backups (retention: 14 days)
 set -e
 cd "$(dirname "$0")/.." || exit 1
 ts=$(date +%F_%H%M)

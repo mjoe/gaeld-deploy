@@ -27,7 +27,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-gaeld}
       POSTGRES_USER: ${DB_USERNAME:-gaeld}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt – ./scripts/init.sh ausführen}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is missing - run ./scripts/init.sh}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

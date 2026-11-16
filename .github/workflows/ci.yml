@@ -23,27 +23,27 @@ jobs:
         run: shellcheck -S warning -s sh scripts/*.sh docker/entrypoint.sh
       - name: Hadolint (Dockerfile)
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < Dockerfile
-      - name: Compose-Datei validieren
+      - name: Validate compose file
         run: |
           ./scripts/init.sh .env.ci
-          docker compose --env-file .env.ci config -q
+          ENV_FILE=.env.ci docker compose --env-file .env.ci config -q
 
   smoke-amd64:
-    name: Build + Smoke-Test (amd64)
+    name: Build + smoke test (amd64)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Smoke-Test
+      - name: Smoke test
         run: ./scripts/smoke-test.sh
 
-  # ARM-Runner sind nur für öffentliche Repos kostenlos
+  # ARM runners are only free for public repositories
   smoke-arm64:
-    name: Build + Smoke-Test (arm64)
+    name: Build + smoke test (arm64)
     if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Smoke-Test
+      - name: Smoke test
         run: ./scripts/smoke-test.sh

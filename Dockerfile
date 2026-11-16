@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
-# Gäld Community Edition – schlankes Produktions-Image (Overlay, ohne Änderungen am Quellcode)
+# Gäld Community Edition - lean production image (overlay, no changes to the upstream source)
 ARG GAELD_VERSION=v3.8.28
 
-# ---------- 1. Quellcode holen und Prüfsumme verifizieren ----------
+# ---------- 1. Fetch the source and verify its checksum ----------
 FROM alpine:3.21 AS source
 ARG GAELD_VERSION
 RUN apk add --no-cache curl
@@ -14,7 +14,7 @@ RUN set -eux; \
     echo "$(cut -d' ' -f1 gaeld.tar.gz.sha256)  gaeld.tar.gz" | sha256sum -c -; \
     mkdir /src; tar xzf gaeld.tar.gz -C /src --strip-components=1
 
-# ---------- 2. Frontend bauen (plattformunabhängig, immer nativ: Node crasht unter QEMU) ----------
+# ---------- 2. Build the frontend (platform independent, always native: Node crashes under QEMU) ----------
 FROM --platform=$BUILDPLATFORM node:22-alpine AS assets
 RUN corepack enable
 WORKDIR /app
@@ -22,14 +22,14 @@ COPY --from=source /src /app
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile && pnpm run build
 
-# ---------- 3. PHP-Basis (Extensions) ----------
+# ---------- 3. PHP base (extensions) ----------
 FROM php:8.4-fpm-alpine AS php-base
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 RUN chmod +x /usr/local/bin/install-php-extensions \
     && install-php-extensions pdo_pgsql bcmath gd zip intl opcache pcntl exif redis \
     && apk add --no-cache curl
 
-# ---------- 4. Composer-Abhängigkeiten (nur Produktion) ----------
+# ---------- 4. Composer dependencies (production only) ----------
 FROM php-base AS vendor
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /app

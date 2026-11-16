@@ -1,18 +1,18 @@
 #!/bin/sh
 set -e
-cd /var/www/html
+cd /var/www/html || exit 1
 
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "FEHLER: APP_KEY ist nicht gesetzt. Zuerst ./scripts/init.sh ausführen." >&2
+    echo "ERROR: APP_KEY is not set. Run ./scripts/init.sh first." >&2
     exit 1
 fi
 
-# Volume kann leer sein (erster Start) oder neue Unterordner brauchen (Update)
+# The volume may be empty (first start) or need new subdirectories (after an update)
 mkdir -p storage/app/public storage/framework/cache storage/framework/sessions \
          storage/framework/views storage/logs bootstrap/cache
 chown -R www-data:www-data storage bootstrap/cache
 
-# Öffentliche Registrierung (legt neue Organisationen an) standardmässig sperren
+# Block public self-registration (it creates new organizations) unless explicitly allowed
 if [ "${ALLOW_REGISTRATION:-false}" = "true" ]; then
     : > /etc/nginx/snippets/registration.conf
 else
