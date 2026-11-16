@@ -79,5 +79,9 @@ result for that release.
 
 ## License
 
-Gäld is licensed under AGPL-3.0-or-later (upstream: <https://github.com/Scanix/Gaeld>).
-The license of this repository has not been decided yet.
+The files in this repository (Dockerfile, compose file, scripts, CI configuration) are licensed under the
+[MIT License](LICENSE).
+
+Gäld itself is licensed under AGPL-3.0-or-later (upstream: <https://github.com/Scanix/Gaeld>) and is not part of
+this repository. It is downloaded at build time, so a built image contains AGPL-licensed code: if you distribute or
+offer such an image or service to others, the AGPL obligations for Gäld apply to that part.
