@@ -63,6 +63,25 @@ docker compose up -d --build
 docker compose exec -u www-data app php artisan gaeld:install   # interactive: admin user + organization
 ```
 
+### Using the prebuilt image instead of building
+
+Every release publishes a multi-arch image (`amd64` and `arm64`) to `ghcr.io/mjoe/gaeld-deploy`, so you do not need
+the Docker build or the Dockerfile on the target machine. All you need are `compose.yaml`, `.env.template` and
+`scripts/init.sh`:
+
+```bash
+./scripts/init.sh
+echo 'GAELD_IMAGE=ghcr.io/mjoe/gaeld-deploy:3.9.0-1' >> .env    # pick a tag from the releases page
+docker compose pull app
+docker compose up -d --no-build
+docker compose exec -u www-data app php artisan gaeld:install
+```
+
+Pin an exact tag such as `3.9.0-1` for reproducible installs. `3.9.0` follows the latest revision of that upstream
+version, and `latest` follows the newest release. To update, change the tag, run `docker compose pull app` and
+`docker compose up -d --no-build`; migrations run on startup. Take a backup first with `./scripts/backup.sh`
+(`update.sh` is meant for building from source and does not apply to the prebuilt image).
+
 **Known upstream bug (v3.9.0):** `gaeld:install` does not set `email_verified_at` (missing from `$fillable`),
 so the admin is redirected to `/email/verify` after the first login. Workaround:
 
@@ -172,6 +191,7 @@ Main options in `.env` (see `.env.template` for all of them):
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `GAELD_IMAGE` | built from source | Use a prebuilt image such as `ghcr.io/mjoe/gaeld-deploy:3.9.0-1` instead of building |
 | `GAELD_SOURCE` | `release` | `release` = release tarball (SHA256-verified), `git` = build a git ref |
 | `GAELD_VERSION` | `v3.9.0` | Release tag, or git ref (`main`, branch, tag, commit) when `GAELD_SOURCE=git` |
 | `INSTALL_OCR` | `false` | Install Tesseract for receipt OCR (larger image; not covered by the smoke test) |
@@ -191,7 +211,8 @@ Main options in `.env` (see `.env.template` for all of them):
   instance could create their own organization. Enable it with `ALLOW_REGISTRATION=true`, then
   `docker compose up -d`. The "Create account" link on the login page stays visible but leads to a 404.
 - **Mail:** without SMTP settings (`MAIL_HOST`, ...) password-reset and verification mails are lost (errors in the log).
-- **Image size:** roughly 500 MB, mostly PHP, its extensions and the application's Composer dependencies.
+- **Image size:** roughly 500 MB on disk (about 120 MB to download), mostly PHP, its extensions and the application's
+  Composer dependencies.
 - **Backups:** `backup.sh` writes files readable by the current user only and removes partial files if a step fails.
   The smoke test covers a backup/restore round trip. Test the restore regularly and keep copies off the host.
   Swiss law requires business records to be kept for 10 years.
